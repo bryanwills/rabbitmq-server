@@ -198,6 +198,12 @@
      {mfa, {rabbit_registry, register,
             [policy_merge_strategy, <<"target-group-size">>, ?MODULE]}},
      {mfa, {rabbit_registry, register,
+            [policy_validator, <<"member-placement-tag">>, ?MODULE]}},
+     {mfa, {rabbit_registry, register,
+            [operator_policy_validator, <<"member-placement-tag">>, ?MODULE]}},
+     {mfa, {rabbit_registry, register,
+            [policy_merge_strategy, <<"member-placement-tag">>, ?MODULE]}},
+     {mfa, {rabbit_registry, register,
             [policy_validator, <<"delayed-retry-type">>, ?MODULE]}},
      {mfa, {rabbit_registry, register,
             [policy_validator, <<"delayed-retry-min">>, ?MODULE]}},
@@ -244,6 +250,11 @@ validate_policy0(<<"target-group-size">>, Value) ->
         true  -> ok;
         false -> {error, "~tp is not a valid qq target count value", [Value]}
     end;
+validate_policy0(<<"member-placement-tag">>, Value)
+  when is_binary(Value), byte_size(Value) > 0 ->
+    ok;
+validate_policy0(<<"member-placement-tag">>, Value) ->
+    {error, "~tp is not a valid member-placement-tag value. Must be a non-empty string", [Value]};
 validate_policy0(<<"delayed-retry-type">>, <<"all">>)      -> ok;
 validate_policy0(<<"delayed-retry-type">>, <<"failed">>)   -> ok;
 validate_policy0(<<"delayed-retry-type">>, <<"returned">>) -> ok;
@@ -263,6 +274,8 @@ validate_policy0(<<"delayed-retry-max">>, Value) ->
 
 merge_policy_value(<<"target-group-size">>, Val, OpVal) ->
     max(Val, OpVal);
+merge_policy_value(<<"member-placement-tag">>, _Val, OpVal) ->
+    OpVal;
 merge_policy_value(<<"delayed-retry-type">>, _Val, OpVal) ->
     OpVal;
 merge_policy_value(<<"delayed-retry-min">>, Val, OpVal) ->
@@ -614,6 +627,7 @@ capabilities() ->
                           <<"x-single-active-consumer">>,
                           <<"x-queue-type">>,
                           <<"x-quorum-initial-group-size">>,
+                          <<"x-member-placement-tag">>,
                           <<"x-delivery-limit">>,
                           <<"x-message-ttl">>,
                           <<"x-queue-leader-locator">>,

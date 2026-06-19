@@ -1497,59 +1497,73 @@ status(#resource{virtual_host = Vhost, name = QueueName}) ->
 status(Q) when ?amqqueue_is_quorum(Q) ->
     {RName, _} = amqqueue:get_pid(Q),
     Nodes = lists:sort(get_nodes(Q)),
+    TagKey = rabbit_queue_location:placement_tag_key(Q),
+    NodeToAZ = case TagKey of
+                   undefined -> #{};
+                   Key       -> rabbit_member_placement_az:node_tags_for_nodes(Nodes, Key)
+               end,
     [begin
          ServerId = {RName, N},
-         case erpc_call(N, ?MODULE, key_metrics_rpc, [ServerId], ?RPC_TIMEOUT) of
-             #{state := RaftState,
-               membership := Membership,
-               commit_index := Commit,
-               term := Term,
-               last_index := Last,
-               last_applied := LastApplied,
-               last_written_index := LastWritten,
-               snapshot_index := SnapIdx,
-               machine_version := MacVer} ->
-                 [{<<"Node Name">>, N},
-                  {<<"Raft State">>, RaftState},
-                  {<<"Membership">>, Membership},
-                  {<<"Last Log Index">>, Last},
-                  {<<"Last Written">>, LastWritten},
-                  {<<"Last Applied">>, LastApplied},
-                  {<<"Commit Index">>, Commit},
-                  {<<"Snapshot Index">>, SnapIdx},
-                  {<<"Term">>, Term},
-                  {<<"Machine Version">>, MacVer}
-                 ];
-             #{state := noproc,
-               membership := unknown,
-               machine_version := MacVer} ->
-                 [{<<"Node Name">>, N},
-                  {<<"Raft State">>, noproc},
-                  {<<"Membership">>, <<>>},
-                  {<<"Last Log Index">>, <<>>},
-                  {<<"Last Written">>, <<>>},
-                  {<<"Last Applied">>, <<>>},
-                  {<<"Commit Index">>, <<>>},
-                  {<<"Snapshot Index">>, <<>>},
-                  {<<"Term">>, <<>>},
-                  {<<"Machine Version">>, MacVer}
-                 ];
-             {error, Reason} ->
-                 State = case is_atom(Reason) of
-                             true -> Reason;
-                             false -> unknown
-                         end,
-                 [{<<"Node Name">>, N},
-                  {<<"Raft State">>, State},
-                  {<<"Membership">>, <<>>},
-                  {<<"Last Log Index">>, <<>>},
-                  {<<"Last Written">>, <<>>},
-                  {<<"Last Applied">>, <<>>},
-                  {<<"Commit Index">>, <<>>},
-                  {<<"Snapshot Index">>, <<>>},
-                  {<<"Term">>, <<>>},
-                  {<<"Machine Version">>, <<>>}
-                 ]
+         BaseRow = case erpc_call(N, ?MODULE, key_metrics_rpc, [ServerId], ?RPC_TIMEOUT) of
+                       #{state := RaftState,
+                         membership := Membership,
+                         commit_index := Commit,
+                         term := Term,
+                         last_index := Last,
+                         last_applied := LastApplied,
+                         last_written_index := LastWritten,
+                         snapshot_index := SnapIdx,
+                         machine_version := MacVer} ->
+                           [{<<"Node Name">>, N},
+                            {<<"Raft State">>, RaftState},
+                            {<<"Membership">>, Membership},
+                            {<<"Last Log Index">>, Last},
+                            {<<"Last Written">>, LastWritten},
+                            {<<"Last Applied">>, LastApplied},
+                            {<<"Commit Index">>, Commit},
+                            {<<"Snapshot Index">>, SnapIdx},
+                            {<<"Term">>, Term},
+                            {<<"Machine Version">>, MacVer}
+                           ];
+                       #{state := noproc,
+                         membership := unknown,
+                         machine_version := MacVer} ->
+                           [{<<"Node Name">>, N},
+                            {<<"Raft State">>, noproc},
+                            {<<"Membership">>, <<>>},
+                            {<<"Last Log Index">>, <<>>},
+                            {<<"Last Written">>, <<>>},
+                            {<<"Last Applied">>, <<>>},
+                            {<<"Commit Index">>, <<>>},
+                            {<<"Snapshot Index">>, <<>>},
+                            {<<"Term">>, <<>>},
+                            {<<"Machine Version">>, MacVer}
+                           ];
+                       {error, Reason} ->
+                           State = case is_atom(Reason) of
+                                       true -> Reason;
+                                       false -> unknown
+                                   end,
+                           [{<<"Node Name">>, N},
+                            {<<"Raft State">>, State},
+                            {<<"Membership">>, <<>>},
+                            {<<"Last Log Index">>, <<>>},
+                            {<<"Last Written">>, <<>>},
+                            {<<"Last Applied">>, <<>>},
+                            {<<"Commit Index">>, <<>>},
+                            {<<"Snapshot Index">>, <<>>},
+                            {<<"Term">>, <<>>},
+                            {<<"Machine Version">>, <<>>}
+                           ]
+                   end,
+         case TagKey of
+             undefined -> BaseRow;
+             _         -> AZ = case maps:get(N, NodeToAZ, undefined) of
+                                   undefined -> <<>>;
+                                   Val       -> Val
+                               end,
+                          [NodeName | Rest] = BaseRow,
+                          [NodeName, {<<"AZ">>, AZ} | Rest]
          end
      end || N <- Nodes].
 

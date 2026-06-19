@@ -19,7 +19,8 @@
          queues_per_node/2]).
 
 -export([build_node_counters/2,
-         select_members_balanced_fallback/6]).
+         select_members_balanced_fallback/6,
+         placement_tag_key/1]).
 
 -ifdef(TEST).
 -export([select_members/8, leader_node/6, leader_locator/1]).
